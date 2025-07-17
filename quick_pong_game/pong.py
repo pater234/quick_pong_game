@@ -61,7 +61,7 @@ ball = pygame.Rect(WIDTH//2 - BALL_SIZE//2, HEIGHT//2 - BALL_SIZE//2, BALL_SIZE,
 
 # --- POWER-UP SYSTEM ---
 POWERUP_SIZE = 20
-POWERUP_TYPES = ["speed", "grow", "shrink"]
+POWERUP_TYPES = ["speed", "grow", "shrink", "split"]
 powerup = None
 powerup_type = None
 powerup_timer = 0
@@ -102,7 +102,7 @@ THEMES = [
 current_theme = 0
 
 # --- LEADERBOARD ---
-LEADERBOARD_FILE = os.path.join(os.path.dirname(__file__), 'leaderboard.txt')
+LEADERBOARD_FILE = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'leaderboard.txt')
 high_score = 0
 
 def load_high_score():
@@ -168,13 +168,23 @@ def reset_ball():
         difficulty_level += 1
         challenge_message = f"Level Up! Difficulty {difficulty_level}"
         challenge_timer = CHALLENGE_DISPLAY
-        global obstacle_speed, PADDLE_SPEED
-        obstacle_speed += 1
-        PADDLE_SPEED += 1
+        global obstacle_speed, PADDLE_SPEED, PADDLE_HEIGHT
+        # Increase speeds gently
+        obstacle_speed = min(obstacle_speed + OBSTACLE_SPEED_INCREMENT, MAX_BALL_SPEED)
+        PADDLE_SPEED = min(PADDLE_SPEED + PADDLE_SPEED_INCREMENT, MAX_PADDLE_SPEED)
+        # Shrink paddles gently
+        PADDLE_HEIGHT = max(int(PADDLE_HEIGHT * 0.95), MIN_PADDLE_HEIGHT)
+        player.height = PADDLE_HEIGHT
+        ai.height = PADDLE_HEIGHT
+        # For four-player mode paddles (horizontal):
+        paddle_left.height = PADDLE_HEIGHT
+        paddle_right.height = PADDLE_HEIGHT
+        paddle_top.width = max(int(paddle_top.width * 0.95), MIN_PADDLE_HEIGHT)
+        paddle_bottom.width = max(int(paddle_bottom.width * 0.95), MIN_PADDLE_HEIGHT)
 
 def spawn_powerup():
     global powerup, powerup_type, powerup_timer
-    if random.randint(0, 600) == 0 and not powerup:  # ~once every 10 seconds
+    if random.randint(0, 180) == 0 and not powerup:  # ~once every 3 seconds
         x = random.randint(WIDTH//4, WIDTH*3//4)
         y = random.randint(40, HEIGHT-40)
         powerup = pygame.Rect(x, y, POWERUP_SIZE, POWERUP_SIZE)
@@ -188,21 +198,37 @@ def draw_powerup():
 
 def handle_powerup_collision():
     global powerup, powerup_type, BALL_SPEED_X, BALL_SPEED_Y, PADDLE_HEIGHT, powerup_active, powerup_effect_timer
+    global display_powerup_banner, powerup_banner_text, powerup_banner_timer, split_active, split_balls, split_timer
     if powerup and ball.colliderect(powerup):
         if powerup_type == "speed":
             BALL_SPEED_X *= 1.5
             BALL_SPEED_Y *= 1.5
+            powerup_banner_text = "Speed Boost!"
         elif powerup_type == "grow":
             player.height = int(player.height * 1.5)
+            powerup_banner_text = "Paddle Grows!"
         elif powerup_type == "shrink":
             ai.height = max(20, int(ai.height * 0.5))
+            powerup_banner_text = "Opponent Shrinks!"
+        elif powerup_type == "split":
+            split_active = True
+            split_timer = SPLIT_DURATION
+            split_balls.clear()
+            # Create 2 extra balls with slightly different angles
+            for angle in [-0.3, 0.3]:
+                vx = BALL_SPEED_X * math.cos(angle) - BALL_SPEED_Y * math.sin(angle)
+                vy = BALL_SPEED_X * math.sin(angle) + BALL_SPEED_Y * math.cos(angle)
+                split_balls.append({"rect": ball.copy(), "vx": vx, "vy": vy})
+            powerup_banner_text = "Ball Split!"
         powerup = None
         powerup_active = True
         powerup_effect_timer = POWERUP_DURATION
-        play_sound(POWERUP_SOUND)
+        display_powerup_banner = True
+        powerup_banner_timer = POWERUP_BANNER_DURATION
 
 def update_powerup():
     global powerup, powerup_timer, BALL_SPEED_X, BALL_SPEED_Y, player, ai, powerup_active, powerup_effect_timer
+    global display_powerup_banner, powerup_banner_timer, split_active, split_balls, split_timer
     if powerup:
         powerup_timer -= 1
         if powerup_timer <= 0:
@@ -217,6 +243,15 @@ def update_powerup():
             player.height = PADDLE_HEIGHT
             ai.height = PADDLE_HEIGHT
             powerup_active = False
+    if display_powerup_banner:
+        powerup_banner_timer -= 1
+        if powerup_banner_timer <= 0:
+            display_powerup_banner = False
+    if split_active:
+        split_timer -= 1
+        if split_timer <= 0:
+            split_active = False
+            split_balls.clear()
 
 # --- OBSTACLE ---
 obstacle = pygame.Rect(WIDTH//2 - 15, HEIGHT//2 - 40, 30, 80)
@@ -266,6 +301,11 @@ def draw():
         ch_text = FONT.render(challenge_message, True, (255,128,0))
         WIN.blit(ch_text, (WIDTH//2 - ch_text.get_width()//2, HEIGHT//2 + 40))
         challenge_timer -= 1
+    # Power-up banner
+    if display_powerup_banner:
+        pygame.draw.rect(WIN, (0,128,255), (0,40,WIDTH,40))
+        banner_text = FONT.render(powerup_banner_text, True, (255,255,255))
+        WIN.blit(banner_text, (WIDTH//2 - banner_text.get_width()//2, 42))
     pygame.display.flip()
 
 def handle_player(keys):
@@ -329,17 +369,33 @@ def move_ball():
 # --- SLOW MOTION ---
 slowmo = False
 slowmo_timer = 0
-SLOWMO_DURATION = 30  # frames
+SLOWMO_DURATION = 10  # frames (was 30)
 SLOWMO_FACTOR = 0.3
 
 # --- GAME STATES ---
 STATE_TITLE = 0
 STATE_PLAY = 1
 STATE_FOURP_SETUP = 2
-STATE_QUIT = 3
+STATE_CHALLENGE_SELECT = 3
+STATE_QUIT = 4
 game_state = STATE_TITLE
 selected_mode = 0  # 0: 1P vs AI, 1: 2P, 2: 4P
 selected_fourp = 0  # 0: 1P vs 3CPU, 1: 2P vs 2CPU
+challenge_mode = False
+
+# Add challenge select screen
+def draw_challenge_select():
+    WIN.fill((20, 20, 40))
+    title = FONT.render("Select Mode", True, (255,255,0))
+    WIN.blit(title, (WIDTH//2 - title.get_width()//2, 40))
+    opts = ["1. Normal", "2. Challenge"]
+    for i, opt in enumerate(opts):
+        color = (0,255,0) if (challenge_mode and i == 1) or (not challenge_mode and i == 0) else (255,255,255)
+        opt_text = FONT.render(opt, True, color)
+        WIN.blit(opt_text, (WIDTH//2 - opt_text.get_width()//2, 120 + i*50))
+    info = pygame.font.SysFont("Arial", 20).render("Use UP/DOWN to select, ENTER to confirm", True, (200,200,200))
+    WIN.blit(info, (WIDTH//2 - info.get_width()//2, HEIGHT-40))
+    pygame.display.flip()
 
 def draw_title():
     WIN.fill((20, 20, 40))
@@ -383,6 +439,8 @@ def reset_fourp_ball():
     global BALL_SPEED_X, BALL_SPEED_Y
     BALL_SPEED_X = random.choice([-1, 1]) * random.randint(4, 8)
     BALL_SPEED_Y = random.choice([-1, 1]) * random.randint(4, 8)
+    BALL_SPEED_X = max(min(BALL_SPEED_X, MAX_BALL_SPEED), -MAX_BALL_SPEED)
+    BALL_SPEED_Y = max(min(BALL_SPEED_Y, MAX_BALL_SPEED), -MAX_BALL_SPEED)
 
 def handle_fourp_controls(keys, two_player):
     # Left paddle: Up/Down
@@ -487,11 +545,36 @@ def draw_fourp():
     # Ball
     pygame.display.flip()
 
+def return_to_title():
+    save_high_score()
+    global game_state, four_player_mode, player_score, ai_score, fourp_scores
+    game_state = STATE_TITLE
+    four_player_mode = False
+    player_score = 0
+    ai_score = 0
+    fourp_scores = [0, 0, 0, 0]
+
+# Place these initializations near the top of the file, after imports and before any function definitions:
+display_powerup_banner = False
+powerup_banner_text = ""
+powerup_banner_timer = 0
+POWERUP_BANNER_DURATION = 60
+split_balls = []
+split_active = False
+split_timer = 0
+SPLIT_DURATION = 600  # 10 seconds at 60 FPS
+BALL_SPEED_INCREMENT = 0.2
+PADDLE_SPEED_INCREMENT = 0.2
+OBSTACLE_SPEED_INCREMENT = 0.2
+MAX_BALL_SPEED = 12
+MAX_PADDLE_SPEED = 12
+MIN_PADDLE_HEIGHT = 30
+
 def main():
     clock = pygame.time.Clock()
     running = True
     load_high_score()
-    global slowmo, slowmo_timer, game_state, selected_mode, selected_fourp, TWO_PLAYER, four_player_mode, fourp_scores
+    global slowmo, slowmo_timer, game_state, selected_mode, selected_fourp, TWO_PLAYER, four_player_mode, fourp_scores, challenge_mode, display_powerup_banner, powerup_banner_text, powerup_banner_timer, split_active, split_balls, split_timer
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -506,24 +589,40 @@ def main():
                         if selected_mode == 2:
                             game_state = STATE_FOURP_SETUP
                         else:
-                            game_state = STATE_PLAY
-                            TWO_PLAYER = (selected_mode == 1)
-                            four_player_mode = False
+                            game_state = STATE_CHALLENGE_SELECT
             elif game_state == STATE_FOURP_SETUP:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_UP or event.key == pygame.K_DOWN:
                         selected_fourp = (selected_fourp + 1) % 2
                     if event.key == pygame.K_RETURN:
+                        game_state = STATE_CHALLENGE_SELECT
+            elif game_state == STATE_CHALLENGE_SELECT:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_UP or event.key == pygame.K_DOWN:
+                        challenge_mode = not challenge_mode
+                    if event.key == pygame.K_RETURN:
                         game_state = STATE_PLAY
-                        four_player_mode = True
-                        fourp_scores = [0,0,0,0]
+                        TWO_PLAYER = (selected_mode == 1)
+                        four_player_mode = (selected_mode == 2)
+                        fourp_scores[:] = [0,0,0,0]
                         # Optionally set up which paddles are human/AI based on selected_fourp
+            elif game_state == STATE_PLAY:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_c:
+                        global current_theme
+                        current_theme = (current_theme + 1) % len(THEMES)
+                    if event.key == pygame.K_ESCAPE:
+                        return_to_title()
         if game_state == STATE_TITLE:
             draw_title()
             clock.tick(30)
             continue
         if game_state == STATE_FOURP_SETUP:
             draw_fourp_setup()
+            clock.tick(30)
+            continue
+        if game_state == STATE_CHALLENGE_SELECT:
+            draw_challenge_select()
             clock.tick(30)
             continue
         keys = pygame.key.get_pressed()
@@ -547,6 +646,9 @@ def main():
         if not slowmo and (ball.left < 30 or ball.right > WIDTH-30):
             slowmo = True
             slowmo_timer = SLOWMO_DURATION
+        # Prevent retriggering slowmo while already active
+        if slowmo and (ball.left < 30 or ball.right > WIDTH-30) and slowmo_timer < SLOWMO_DURATION:
+            pass  # Do not retrigger or extend slowmo
         if slowmo:
             clock.tick(int(60 * SLOWMO_FACTOR))
             slowmo_timer -= 1
