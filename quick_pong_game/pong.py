@@ -922,14 +922,8 @@ def set_windows_overlay(alpha=None):
     pygame.display.set_mode((WIDTH, HEIGHT), pygame.NOFRAME)
 
 # --- OVERLAY MODE FLAG ---
-overlay_mode = True  # Set to True to enable overlay
-
-# After pygame.init() and before main():
-if overlay_mode:
-    info = pygame.display.Info()
-    WIDTH, HEIGHT = info.current_w, info.current_h
-    WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.NOFRAME)
-    set_windows_overlay(alpha=0.1)
+# Set overlay_mode default to True
+overlay_mode = True  # Overlay mode enabled by default
 
 # Add this near the top of the file, before main():
 show_controls = False
@@ -956,10 +950,18 @@ def draw_controls_screen():
     pygame.display.flip()
 
 def main():
+    global WIDTH, HEIGHT, WIN, overlay_mode
+    global slowmo, slowmo_timer, game_state, selected_mode, selected_fourp, TWO_PLAYER, four_player_mode, fourp_scores, challenge_mode, display_powerup_banner, powerup_banner_text, powerup_banner_timer, split_active, split_balls, split_timer, vector_mode, vector_select_index, player_prev_y, player_vel, ai_prev_y, ai_vel, paddle_left_prev_y, paddle_left_vel, paddle_right_prev_y, paddle_right_vel, paddle_top_prev_x, paddle_top_vel, paddle_bottom_prev_x, paddle_bottom_vel, overlay_alpha, show_controls, clock
     clock = pygame.time.Clock()
     running = True
     load_high_score()
-    global slowmo, slowmo_timer, game_state, selected_mode, selected_fourp, TWO_PLAYER, four_player_mode, fourp_scores, challenge_mode, display_powerup_banner, powerup_banner_text, powerup_banner_timer, split_active, split_balls, split_timer, vector_mode, vector_select_index, player_prev_y, player_vel, ai_prev_y, ai_vel, paddle_left_prev_y, paddle_left_vel, paddle_right_prev_y, paddle_right_vel, paddle_top_prev_x, paddle_top_vel, paddle_bottom_prev_x, paddle_bottom_vel, overlay_alpha, show_controls
+    # After pygame.init(), set overlay mode ON by default
+    if overlay_mode:
+        info = pygame.display.Info()
+        WIDTH, HEIGHT = info.current_w, info.current_h
+        WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.NOFRAME)
+        set_windows_overlay(overlay_alpha)
+
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -1009,12 +1011,26 @@ def main():
                     if show_controls and (event.key == pygame.K_SPACE or event.key == pygame.K_RETURN):
                         show_controls = False
                     if overlay_mode:
+                        if event.key == pygame.K_q:
+                            pygame.quit()
+                            sys.exit()
                         if event.key == pygame.K_m:
-                            overlay_alpha = min(0.5, overlay_alpha + 0.02)  # n = more visible
-                            set_windows_overlay(overlay_alpha)
+                            overlay_alpha = min(0.5, overlay_alpha + 0.02)
+                            if overlay_mode:
+                                set_windows_overlay(overlay_alpha)
                         if event.key == pygame.K_n:
-                            overlay_alpha = max(0.02, overlay_alpha - 0.02)  # m = less visible
-                            set_windows_overlay(overlay_alpha)
+                            overlay_alpha = max(0.02, overlay_alpha - 0.02)
+                            if overlay_mode:
+                                set_windows_overlay(overlay_alpha)
+                        if event.key == pygame.K_o:
+                            overlay_mode = not overlay_mode
+                            if overlay_mode:
+                                info = pygame.display.Info()
+                                WIDTH, HEIGHT = info.current_w, info.current_h
+                                WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.NOFRAME)
+                                set_windows_overlay(overlay_alpha)
+                            else:
+                                WIN = pygame.display.set_mode((WIDTH, HEIGHT))
         if game_state == STATE_TITLE:
             draw_title()
             clock.tick(30)
