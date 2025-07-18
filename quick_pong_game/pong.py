@@ -898,11 +898,68 @@ paddle_top_vel = 0
 paddle_bottom_prev_x = 0
 paddle_bottom_vel = 0
 
+# --- WINDOWS OVERLAY MODE ---
+# Add global variable for overlay alpha
+overlay_alpha = 0.3
+
+# Update set_windows_overlay to use overlay_alpha
+
+def set_windows_overlay(alpha=None):
+    if sys.platform != "win32":
+        return
+    import ctypes
+    hwnd = pygame.display.get_wm_info()["window"]
+    GWL_EXSTYLE = -20
+    WS_EX_LAYERED = 0x80000
+    WS_EX_TOPMOST = 0x0008
+    WS_EX_TOOLWINDOW = 0x00000080
+    style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
+    style |= WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW
+    ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, style)
+    LWA_ALPHA = 0x2
+    a = int((alpha if alpha is not None else overlay_alpha) * 255)
+    ctypes.windll.user32.SetLayeredWindowAttributes(hwnd, 0, a, LWA_ALPHA)
+    pygame.display.set_mode((WIDTH, HEIGHT), pygame.NOFRAME)
+
+# --- OVERLAY MODE FLAG ---
+overlay_mode = True  # Set to True to enable overlay
+
+# After pygame.init() and before main():
+if overlay_mode:
+    info = pygame.display.Info()
+    WIDTH, HEIGHT = info.current_w, info.current_h
+    WIN = pygame.display.set_mode((WIDTH, HEIGHT), pygame.NOFRAME)
+    set_windows_overlay(alpha=0.1)
+
+# Add this near the top of the file, before main():
+show_controls = False
+
+def draw_controls_screen():
+    WIN.fill((20, 20, 40))
+    title = FONT.render("Controls", True, (255,255,0))
+    WIN.blit(title, (WIDTH//2 - title.get_width()//2, 40))
+    lines = [
+        "ESC: Return to Title Screen",
+        "F1: Show/Hide Controls",
+        "M: More Transparent (Overlay Mode)",
+        "N: Less Transparent (Overlay Mode)",
+        "C: Change Color Theme",
+        "Up/Down: Move Paddle (P1)",
+        "W/S: Move Paddle (P2 or AI)",
+        "A/D: Move Top Paddle (P1 or P2)",
+        "J/L: Move Bottom Paddle (P2 or P1)",
+        "Space/Enter: Dismiss Controls"
+    ]
+    for i, line in enumerate(lines):
+        txt = pygame.font.SysFont("Arial", 24).render(line, True, (255,255,255))
+        WIN.blit(txt, (WIDTH//2 - txt.get_width()//2, 120 + i*35))
+    pygame.display.flip()
+
 def main():
     clock = pygame.time.Clock()
     running = True
     load_high_score()
-    global slowmo, slowmo_timer, game_state, selected_mode, selected_fourp, TWO_PLAYER, four_player_mode, fourp_scores, challenge_mode, display_powerup_banner, powerup_banner_text, powerup_banner_timer, split_active, split_balls, split_timer, vector_mode, vector_select_index, player_prev_y, player_vel, ai_prev_y, ai_vel, paddle_left_prev_y, paddle_left_vel, paddle_right_prev_y, paddle_right_vel, paddle_top_prev_x, paddle_top_vel, paddle_bottom_prev_x, paddle_bottom_vel
+    global slowmo, slowmo_timer, game_state, selected_mode, selected_fourp, TWO_PLAYER, four_player_mode, fourp_scores, challenge_mode, display_powerup_banner, powerup_banner_text, powerup_banner_timer, split_active, split_balls, split_timer, vector_mode, vector_select_index, player_prev_y, player_vel, ai_prev_y, ai_vel, paddle_left_prev_y, paddle_left_vel, paddle_right_prev_y, paddle_right_vel, paddle_top_prev_x, paddle_top_vel, paddle_bottom_prev_x, paddle_bottom_vel, overlay_alpha, show_controls
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -947,6 +1004,17 @@ def main():
                         current_theme = (current_theme + 1) % len(THEMES)
                     if event.key == pygame.K_ESCAPE:
                         return_to_title()
+                    if event.key == pygame.K_F1:
+                        show_controls = not show_controls
+                    if show_controls and (event.key == pygame.K_SPACE or event.key == pygame.K_RETURN):
+                        show_controls = False
+                    if overlay_mode:
+                        if event.key == pygame.K_m:
+                            overlay_alpha = min(0.5, overlay_alpha + 0.02)  # n = more visible
+                            set_windows_overlay(overlay_alpha)
+                        if event.key == pygame.K_n:
+                            overlay_alpha = max(0.02, overlay_alpha - 0.02)  # m = less visible
+                            set_windows_overlay(overlay_alpha)
         if game_state == STATE_TITLE:
             draw_title()
             clock.tick(30)
@@ -1006,6 +1074,10 @@ def main():
         else:
             clock.tick(60)
         draw()
+        if show_controls:
+            draw_controls_screen()
+            clock.tick(30)
+            continue
     pygame.quit()
     sys.exit()
 
