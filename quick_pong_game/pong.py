@@ -163,8 +163,8 @@ def reset_ball():
             perfect_game = True
             achievement_message = "Perfect Game!"
             achievement_timer = ACHIEVEMENT_DISPLAY
-    # Challenge mode: increase difficulty every 5 points
-    if (player_score + ai_score) // 5 + 1 > difficulty_level:
+    # Challenge mode: increase difficulty every 15 points (was 5)
+    if (player_score + ai_score) // 15 + 1 > difficulty_level:
         difficulty_level += 1
         challenge_message = f"Level Up! Difficulty {difficulty_level}"
         challenge_timer = CHALLENGE_DISPLAY
@@ -182,9 +182,13 @@ def reset_ball():
         paddle_top.width = max(int(paddle_top.width * 0.95), MIN_PADDLE_HEIGHT)
         paddle_bottom.width = max(int(paddle_bottom.width * 0.95), MIN_PADDLE_HEIGHT)
 
+# Add variable to track last paddle to touch ball
+last_paddle_touched = "player"  # "player", "ai", "left", "right", "top", "bottom"
+
+# Make power-ups more frequent
 def spawn_powerup():
     global powerup, powerup_type, powerup_timer
-    if random.randint(0, 180) == 0 and not powerup:  # ~once every 3 seconds
+    if random.randint(0, 90) == 0 and not powerup:  # ~once every 1.5 seconds (was 3 seconds)
         x = random.randint(WIDTH//4, WIDTH*3//4)
         y = random.randint(40, HEIGHT-40)
         powerup = pygame.Rect(x, y, POWERUP_SIZE, POWERUP_SIZE)
@@ -196,6 +200,7 @@ def draw_powerup():
         color = (0,255,0) if powerup_type == "speed" else (0,0,255) if powerup_type == "grow" else (255,0,0)
         pygame.draw.rect(WIN, color, powerup)
 
+# Update power-up effects to apply to the correct paddle:
 def handle_powerup_collision():
     global powerup, powerup_type, BALL_SPEED_X, BALL_SPEED_Y, PADDLE_HEIGHT, powerup_active, powerup_effect_timer
     global display_powerup_banner, powerup_banner_text, powerup_banner_timer, split_active, split_balls, split_timer
@@ -205,11 +210,86 @@ def handle_powerup_collision():
             BALL_SPEED_Y *= 1.5
             powerup_banner_text = "Speed Boost!"
         elif powerup_type == "grow":
-            player.height = int(player.height * 1.5)
-            powerup_banner_text = "Paddle Grows!"
+            # Apply to the paddle that last touched the ball
+            if four_player_mode:
+                if last_paddle_touched == "left":
+                    paddle_left.height = int(paddle_left.height * 1.5)
+                    powerup_banner_text = "Left Paddle Grows!"
+                elif last_paddle_touched == "right":
+                    paddle_right.height = int(paddle_right.height * 1.5)
+                    powerup_banner_text = "Right Paddle Grows!"
+                elif last_paddle_touched == "top":
+                    paddle_top.width = int(paddle_top.width * 1.5)
+                    powerup_banner_text = "Top Paddle Grows!"
+                elif last_paddle_touched == "bottom":
+                    paddle_bottom.width = int(paddle_bottom.width * 1.5)
+                    powerup_banner_text = "Bottom Paddle Grows!"
+            else:
+                if last_paddle_touched == "player":
+                    player.height = int(player.height * 1.5)
+                    powerup_banner_text = "Your Paddle Grows!"
+                else:
+                    ai.height = int(ai.height * 1.5)
+                    powerup_banner_text = "AI Paddle Grows!"
         elif powerup_type == "shrink":
-            ai.height = max(20, int(ai.height * 0.5))
-            powerup_banner_text = "Opponent Shrinks!"
+            # Apply to the opponent of the paddle that last touched the ball
+            if four_player_mode:
+                if last_paddle_touched == "left":
+                    # Shrink a random opponent paddle
+                    opponent_paddles = ["right", "top", "bottom"]
+                    target = random.choice(opponent_paddles)
+                    if target == "right":
+                        paddle_right.height = max(20, int(paddle_right.height * 0.5))
+                        powerup_banner_text = "Right Paddle Shrinks!"
+                    elif target == "top":
+                        paddle_top.width = max(20, int(paddle_top.width * 0.5))
+                        powerup_banner_text = "Top Paddle Shrinks!"
+                    elif target == "bottom":
+                        paddle_bottom.width = max(20, int(paddle_bottom.width * 0.5))
+                        powerup_banner_text = "Bottom Paddle Shrinks!"
+                elif last_paddle_touched == "right":
+                    opponent_paddles = ["left", "top", "bottom"]
+                    target = random.choice(opponent_paddles)
+                    if target == "left":
+                        paddle_left.height = max(20, int(paddle_left.height * 0.5))
+                        powerup_banner_text = "Left Paddle Shrinks!"
+                    elif target == "top":
+                        paddle_top.width = max(20, int(paddle_top.width * 0.5))
+                        powerup_banner_text = "Top Paddle Shrinks!"
+                    elif target == "bottom":
+                        paddle_bottom.width = max(20, int(paddle_bottom.width * 0.5))
+                        powerup_banner_text = "Bottom Paddle Shrinks!"
+                elif last_paddle_touched == "top":
+                    opponent_paddles = ["left", "right", "bottom"]
+                    target = random.choice(opponent_paddles)
+                    if target == "left":
+                        paddle_left.height = max(20, int(paddle_left.height * 0.5))
+                        powerup_banner_text = "Left Paddle Shrinks!"
+                    elif target == "right":
+                        paddle_right.height = max(20, int(paddle_right.height * 0.5))
+                        powerup_banner_text = "Right Paddle Shrinks!"
+                    elif target == "bottom":
+                        paddle_bottom.width = max(20, int(paddle_bottom.width * 0.5))
+                        powerup_banner_text = "Bottom Paddle Shrinks!"
+                elif last_paddle_touched == "bottom":
+                    opponent_paddles = ["left", "right", "top"]
+                    target = random.choice(opponent_paddles)
+                    if target == "left":
+                        paddle_left.height = max(20, int(paddle_left.height * 0.5))
+                        powerup_banner_text = "Left Paddle Shrinks!"
+                    elif target == "right":
+                        paddle_right.height = max(20, int(paddle_right.height * 0.5))
+                        powerup_banner_text = "Right Paddle Shrinks!"
+                    elif target == "top":
+                        paddle_top.width = max(20, int(paddle_top.width * 0.5))
+                        powerup_banner_text = "Top Paddle Shrinks!"
+            else:
+                if last_paddle_touched == "player":
+                    ai.height = max(20, int(ai.height * 0.5))
+                    powerup_banner_text = "AI Paddle Shrinks!"
+                else:
+                    player.height = max(20, int(player.height * 0.5))
+                    powerup_banner_text = "Your Paddle Shrinks!"
         elif powerup_type == "split":
             split_active = True
             split_timer = SPLIT_DURATION
@@ -223,6 +303,7 @@ def handle_powerup_collision():
         powerup = None
         powerup_active = True
         powerup_effect_timer = POWERUP_DURATION
+        play_sound(POWERUP_SOUND)
         display_powerup_banner = True
         powerup_banner_timer = POWERUP_BANNER_DURATION
 
@@ -277,6 +358,10 @@ def draw():
     pygame.draw.ellipse(WIN, theme["ball"], ball)
     pygame.draw.aaline(WIN, theme["paddle"], (WIDTH//2, 0), (WIDTH//2, HEIGHT))
     pygame.draw.rect(WIN, (128,128,128), obstacle)
+    # Draw split balls if active
+    if split_active:
+        for b in split_balls:
+            pygame.draw.ellipse(WIN, theme["ball"], b["rect"])
     # Crazy mode flash
     if crazy_mode_active:
         pygame.draw.rect(WIN, (255,0,0), (0,0,WIDTH,40))
@@ -355,6 +440,10 @@ def move_ball():
 
     # Paddle collision
     if ball.colliderect(player) or ball.colliderect(ai):
+        if ball.colliderect(player):
+            last_paddle_touched = "player"
+        else:
+            last_paddle_touched = "ai"
         BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'x')
         play_sound(HIT_SOUND)
 
@@ -365,6 +454,25 @@ def move_ball():
     if ball.right >= WIDTH:
         player_score += 1
         reset_ball()
+
+    # Move split balls if active
+    if split_active:
+        for b in split_balls:
+            b["rect"].x += b["vx"]
+            b["rect"].y += b["vy"]
+            # Bounce off top/bottom
+            if b["rect"].top <= 0 or b["rect"].bottom >= HEIGHT:
+                b["vy"] *= -1
+            # Bounce off paddles
+            if b["rect"].colliderect(player) or b["rect"].colliderect(ai):
+                b["vx"], b["vy"] = randomize_ball_angle(b["vx"], b["vy"], 'x')
+            # Score
+            if b["rect"].left <= 0:
+                ai_score += 1
+                b["rect"].center = (WIDTH//2, HEIGHT//2)
+            if b["rect"].right >= WIDTH:
+                player_score += 1
+                b["rect"].center = (WIDTH//2, HEIGHT//2)
 
 # --- SLOW MOTION ---
 slowmo = False
@@ -432,6 +540,38 @@ paddle_right = ai
 paddle_top = pygame.Rect(WIDTH//2 - PADDLE_HEIGHT//2, 10, PADDLE_HEIGHT, PADDLE_WIDTH)
 paddle_bottom = pygame.Rect(WIDTH//2 - PADDLE_HEIGHT//2, HEIGHT-10-PADDLE_WIDTH, PADDLE_HEIGHT, PADDLE_WIDTH)
 
+# Add these variables for four-player paddle allocation:
+paddle_assignments = []  # [left, right, top, bottom] - 0=CPU, 1=P1, 2=P2
+paddle_labels = ["CPU", "P1", "P2"]
+
+def assign_fourp_paddles(two_player):
+    global paddle_assignments
+    if two_player:
+        # 2P vs 2CPU: randomly assign 2 paddles to players
+        available = [0, 1, 2, 3]  # left, right, top, bottom
+        p1_paddle = random.choice(available)
+        available.remove(p1_paddle)
+        p2_paddle = random.choice(available)
+        paddle_assignments = [0, 0, 0, 0]  # all CPU initially
+        paddle_assignments[p1_paddle] = 1  # P1
+        paddle_assignments[p2_paddle] = 2  # P2
+    else:
+        # 1P vs 3CPU: randomly assign 1 paddle to player
+        player_paddle = random.randint(0, 3)
+        paddle_assignments = [0, 0, 0, 0]  # all CPU initially
+        paddle_assignments[player_paddle] = 1  # P1
+
+def get_paddle_controls(paddle_index):
+    # Return the control keys for a given paddle
+    if paddle_index == 0:  # left
+        return "UP/DOWN"
+    elif paddle_index == 1:  # right
+        return "W/S"
+    elif paddle_index == 2:  # top
+        return "A/D"
+    elif paddle_index == 3:  # bottom
+        return "J/L"
+
 def reset_fourp_ball():
     ball.center = (WIDTH//2, HEIGHT//2)
     ball.x = WIDTH//2 - BALL_SIZE//2
@@ -443,43 +583,69 @@ def reset_fourp_ball():
     BALL_SPEED_Y = max(min(BALL_SPEED_Y, MAX_BALL_SPEED), -MAX_BALL_SPEED)
 
 def handle_fourp_controls(keys, two_player):
-    # Left paddle: Up/Down
-    if keys[pygame.K_UP] and paddle_left.top > 0:
-        paddle_left.y -= PADDLE_SPEED
-    if keys[pygame.K_DOWN] and paddle_left.bottom < HEIGHT:
-        paddle_left.y += PADDLE_SPEED
-    # Right paddle: W/S
-    if two_player:
+    # Left paddle (index 0)
+    if paddle_assignments[0] == 1:  # P1 controls left
+        if keys[pygame.K_UP] and paddle_left.top > 0:
+            paddle_left.y -= PADDLE_SPEED
+        if keys[pygame.K_DOWN] and paddle_left.bottom < HEIGHT:
+            paddle_left.y += PADDLE_SPEED
+    elif paddle_assignments[0] == 2:  # P2 controls left
+        if keys[pygame.K_w] and paddle_left.top > 0:
+            paddle_left.y -= PADDLE_SPEED
+        if keys[pygame.K_s] and paddle_left.bottom < HEIGHT:
+            paddle_left.y += PADDLE_SPEED
+    else:  # CPU controls left
+        if paddle_left.centery < ball.centery and paddle_left.bottom < HEIGHT:
+            paddle_left.y += PADDLE_SPEED - 2
+        if paddle_left.centery > ball.centery and paddle_left.top > 0:
+            paddle_left.y -= PADDLE_SPEED - 2
+    
+    # Right paddle (index 1)
+    if paddle_assignments[1] == 1:  # P1 controls right
+        if keys[pygame.K_UP] and paddle_right.top > 0:
+            paddle_right.y -= PADDLE_SPEED
+        if keys[pygame.K_DOWN] and paddle_right.bottom < HEIGHT:
+            paddle_right.y += PADDLE_SPEED
+    elif paddle_assignments[1] == 2:  # P2 controls right
         if keys[pygame.K_w] and paddle_right.top > 0:
             paddle_right.y -= PADDLE_SPEED
         if keys[pygame.K_s] and paddle_right.bottom < HEIGHT:
             paddle_right.y += PADDLE_SPEED
-    else:
-        # AI for right
+    else:  # CPU controls right
         if paddle_right.centery < ball.centery and paddle_right.bottom < HEIGHT:
             paddle_right.y += PADDLE_SPEED - 2
         if paddle_right.centery > ball.centery and paddle_right.top > 0:
             paddle_right.y -= PADDLE_SPEED - 2
-    # Top paddle: A/D (P1 or P2)
-    if two_player:
+    
+    # Top paddle (index 2)
+    if paddle_assignments[2] == 1:  # P1 controls top
         if keys[pygame.K_a] and paddle_top.left > 0:
             paddle_top.x -= PADDLE_SPEED
         if keys[pygame.K_d] and paddle_top.right < WIDTH:
             paddle_top.x += PADDLE_SPEED
-    else:
-        # AI for top
+    elif paddle_assignments[2] == 2:  # P2 controls top
+        if keys[pygame.K_j] and paddle_top.left > 0:
+            paddle_top.x -= PADDLE_SPEED
+        if keys[pygame.K_l] and paddle_top.right < WIDTH:
+            paddle_top.x += PADDLE_SPEED
+    else:  # CPU controls top
         if paddle_top.centerx < ball.centerx and paddle_top.right < WIDTH:
             paddle_top.x += PADDLE_SPEED - 2
         if paddle_top.centerx > ball.centerx and paddle_top.left > 0:
             paddle_top.x -= PADDLE_SPEED - 2
-    # Bottom paddle: J/L (P2 or P1)
-    if two_player:
+    
+    # Bottom paddle (index 3)
+    if paddle_assignments[3] == 1:  # P1 controls bottom
+        if keys[pygame.K_a] and paddle_bottom.left > 0:
+            paddle_bottom.x -= PADDLE_SPEED
+        if keys[pygame.K_d] and paddle_bottom.right < WIDTH:
+            paddle_bottom.x += PADDLE_SPEED
+    elif paddle_assignments[3] == 2:  # P2 controls bottom
         if keys[pygame.K_j] and paddle_bottom.left > 0:
             paddle_bottom.x -= PADDLE_SPEED
         if keys[pygame.K_l] and paddle_bottom.right < WIDTH:
             paddle_bottom.x += PADDLE_SPEED
-    else:
-        # AI for bottom
+    else:  # CPU controls bottom
         if paddle_bottom.centerx < ball.centerx and paddle_bottom.right < WIDTH:
             paddle_bottom.x += PADDLE_SPEED - 2
         if paddle_bottom.centerx > ball.centerx and paddle_bottom.left > 0:
@@ -491,15 +657,19 @@ def move_fourp_ball():
     ball.y += BALL_SPEED_Y
     # Paddle collisions
     if ball.colliderect(paddle_left):
+        last_paddle_touched = "left"
         BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'x')
         play_sound(HIT_SOUND)
     if ball.colliderect(paddle_right):
+        last_paddle_touched = "right"
         BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'x')
         play_sound(HIT_SOUND)
     if ball.colliderect(paddle_top):
+        last_paddle_touched = "top"
         BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'y')
         play_sound(HIT_SOUND)
     if ball.colliderect(paddle_bottom):
+        last_paddle_touched = "bottom"
         BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'y')
         play_sound(HIT_SOUND)
     # Wall scoring
@@ -520,14 +690,65 @@ def move_fourp_ball():
         reset_fourp_ball()
         play_sound(SCORE_SOUND)
 
+    # Move split balls if active
+    if split_active:
+        for b in split_balls:
+            b["rect"].x += b["vx"]
+            b["rect"].y += b["vy"]
+            # Bounce off top/bottom
+            if b["rect"].top <= 0 or b["rect"].bottom >= HEIGHT:
+                b["vy"] *= -1
+            # Bounce off paddles
+            if b["rect"].colliderect(paddle_left):
+                b["vx"], b["vy"] = randomize_ball_angle(b["vx"], b["vy"], 'x')
+            if b["rect"].colliderect(paddle_right):
+                b["vx"], b["vy"] = randomize_ball_angle(b["vx"], b["vy"], 'x')
+            if b["rect"].colliderect(paddle_top):
+                b["vx"], b["vy"] = randomize_ball_angle(b["vx"], b["vy"], 'y')
+            if b["rect"].colliderect(paddle_bottom):
+                b["vx"], b["vy"] = randomize_ball_angle(b["vx"], b["vy"], 'y')
+            # Score
+            if b["rect"].left <= 0:
+                fourp_scores[0] += 1
+                b["rect"].center = (WIDTH//2, HEIGHT//2)
+            if b["rect"].right >= WIDTH:
+                fourp_scores[1] += 1
+                b["rect"].center = (WIDTH//2, HEIGHT//2)
+            if b["rect"].top <= 0:
+                fourp_scores[2] += 1
+                b["rect"].center = (WIDTH//2, HEIGHT//2)
+            if b["rect"].bottom >= HEIGHT:
+                fourp_scores[3] += 1
+                b["rect"].center = (WIDTH//2, HEIGHT//2)
+
 def draw_fourp():
     theme = THEMES[current_theme]
     WIN.fill(theme["bg"])
-    pygame.draw.rect(WIN, theme["paddle"], paddle_left)
-    pygame.draw.rect(WIN, theme["paddle"], paddle_right)
-    pygame.draw.rect(WIN, theme["paddle"], paddle_top)
-    pygame.draw.rect(WIN, theme["paddle"], paddle_bottom)
+    
+    # Draw paddles with labels
+    paddles = [paddle_left, paddle_right, paddle_top, paddle_bottom]
+    for i, paddle in enumerate(paddles):
+        # Draw paddle
+        pygame.draw.rect(WIN, theme["paddle"], paddle)
+        
+        # Draw label
+        label = paddle_labels[paddle_assignments[i]]
+        label_color = (0,255,0) if paddle_assignments[i] > 0 else (128,128,128)
+        font_small = pygame.font.SysFont("Arial", 16)
+        label_text = font_small.render(label, True, label_color)
+        
+        # Position label on paddle
+        if i < 2:  # left/right paddles
+            label_x = paddle.centerx - label_text.get_width()//2
+            label_y = paddle.centery - label_text.get_height()//2
+        else:  # top/bottom paddles
+            label_x = paddle.centerx - label_text.get_width()//2
+            label_y = paddle.centery - label_text.get_height()//2
+        
+        WIN.blit(label_text, (label_x, label_y))
+    
     pygame.draw.ellipse(WIN, theme["ball"], ball)
+    
     # Scores
     font_small = pygame.font.SysFont("Arial", 24)
     labels = ["L", "R", "T", "B"]
@@ -542,17 +763,39 @@ def draw_fourp():
             WIN.blit(txt, (WIDTH//2 - txt.get_width()//2, 10))
         elif i == 3:
             WIN.blit(txt, (WIDTH//2 - txt.get_width()//2, HEIGHT - 30))
-    # Ball
+    
+    # Show controls info
+    controls_font = pygame.font.SysFont("Arial", 14)
+    controls_text = controls_font.render("P1: UP/DOWN or A/D, P2: W/S or J/L", True, (200,200,200))
+    WIN.blit(controls_text, (WIDTH//2 - controls_text.get_width()//2, HEIGHT - 15))
+    
+    # Draw split balls if active
+    if split_active:
+        for b in split_balls:
+            pygame.draw.ellipse(WIN, theme["ball"], b["rect"])
+
     pygame.display.flip()
 
 def return_to_title():
     save_high_score()
-    global game_state, four_player_mode, player_score, ai_score, fourp_scores
+    global game_state, four_player_mode, player_score, ai_score, fourp_scores, difficulty_level, PADDLE_SPEED, obstacle_speed, PADDLE_HEIGHT
     game_state = STATE_TITLE
     four_player_mode = False
     player_score = 0
     ai_score = 0
     fourp_scores = [0, 0, 0, 0]
+    # Reset difficulty
+    difficulty_level = 1
+    PADDLE_SPEED = 7
+    obstacle_speed = 3
+    PADDLE_HEIGHT = 100
+    # Reset paddle sizes
+    player.height = PADDLE_HEIGHT
+    ai.height = PADDLE_HEIGHT
+    paddle_left.height = PADDLE_HEIGHT
+    paddle_right.height = PADDLE_HEIGHT
+    paddle_top.width = PADDLE_HEIGHT
+    paddle_bottom.width = PADDLE_HEIGHT
 
 # Place these initializations near the top of the file, after imports and before any function definitions:
 display_powerup_banner = False
@@ -605,6 +848,8 @@ def main():
                         TWO_PLAYER = (selected_mode == 1)
                         four_player_mode = (selected_mode == 2)
                         fourp_scores[:] = [0,0,0,0]
+                        if four_player_mode:
+                            assign_fourp_paddles(selected_fourp == 1)
                         # Optionally set up which paddles are human/AI based on selected_fourp
             elif game_state == STATE_PLAY:
                 if event.type == pygame.KEYDOWN:
