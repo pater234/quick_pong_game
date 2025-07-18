@@ -402,10 +402,18 @@ def draw():
     pygame.display.flip()
 
 def handle_player(keys):
-    if keys[pygame.K_UP] and player.top > 0:
-        player.y -= PADDLE_SPEED
-    if keys[pygame.K_DOWN] and player.bottom < HEIGHT:
-        player.y += PADDLE_SPEED
+    if not TWO_PLAYER:
+        # One player mode: allow both WASD and arrows for left paddle
+        if (keys[pygame.K_UP] or keys[pygame.K_w]) and player.top > 0:
+            player.y -= PADDLE_SPEED
+        if (keys[pygame.K_DOWN] or keys[pygame.K_s]) and player.bottom < HEIGHT:
+            player.y += PADDLE_SPEED
+    else:
+        # Two player mode: left paddle is WASD
+        if keys[pygame.K_w] and player.top > 0:
+            player.y -= PADDLE_SPEED
+        if keys[pygame.K_s] and player.bottom < HEIGHT:
+            player.y += PADDLE_SPEED
 
 def handle_ai():
     if ai.centery < ball.centery and ai.bottom < HEIGHT:
@@ -415,14 +423,18 @@ def handle_ai():
 
 # Two-player paddle handler
 def handle_player2(keys):
-    global TWO_PLAYER
-    if keys[pygame.K_w] or keys[pygame.K_s]:
-        TWO_PLAYER = True
     if TWO_PLAYER:
-        if keys[pygame.K_w] and ai.top > 0:
+        # Two player mode: right paddle is arrows
+        if keys[pygame.K_UP] and ai.top > 0:
             ai.y -= PADDLE_SPEED
-        if keys[pygame.K_s] and ai.bottom < HEIGHT:
+        if keys[pygame.K_DOWN] and ai.bottom < HEIGHT:
             ai.y += PADDLE_SPEED
+    else:
+        # One player mode: AI controls right paddle
+        if ai.centery < ball.centery and ai.bottom < HEIGHT:
+            ai.y += PADDLE_SPEED - 2
+        if ai.centery > ball.centery and ai.top > 0:
+            ai.y -= PADDLE_SPEED - 2
 
 def move_ball():
     global BALL_SPEED_X, BALL_SPEED_Y, player_score, ai_score, crazy_mode_active, CRAZY_MODE_TIMER
@@ -966,6 +978,10 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_q:
+                    pygame.quit()
+                    sys.exit()
             if game_state == STATE_TITLE:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_UP:
@@ -1011,9 +1027,6 @@ def main():
                     if show_controls and (event.key == pygame.K_SPACE or event.key == pygame.K_RETURN):
                         show_controls = False
                     if overlay_mode:
-                        if event.key == pygame.K_q:
-                            pygame.quit()
-                            sys.exit()
                         if event.key == pygame.K_m:
                             overlay_alpha = min(0.5, overlay_alpha + 0.02)
                             if overlay_mode:
