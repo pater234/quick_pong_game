@@ -61,7 +61,7 @@ ball = pygame.Rect(WIDTH//2 - BALL_SIZE//2, HEIGHT//2 - BALL_SIZE//2, BALL_SIZE,
 
 # --- POWER-UP SYSTEM ---
 POWERUP_SIZE = 20
-POWERUP_TYPES = ["speed", "grow", "shrink", "split"]
+POWERUP_TYPES = ["speed", "grow", "shrink", "split", "slow"]
 powerup = None
 powerup_type = None
 powerup_timer = 0
@@ -164,7 +164,7 @@ def reset_ball():
             achievement_message = "Perfect Game!"
             achievement_timer = ACHIEVEMENT_DISPLAY
     # Challenge mode: increase difficulty every 15 points (was 5)
-    if (player_score + ai_score) // 15 + 1 > difficulty_level:
+    if not vector_mode and (player_score + ai_score) // 15 + 1 > difficulty_level:
         difficulty_level += 1
         challenge_message = f"Level Up! Difficulty {difficulty_level}"
         challenge_timer = CHALLENGE_DISPLAY
@@ -300,6 +300,14 @@ def handle_powerup_collision():
                 vy = BALL_SPEED_X * math.sin(angle) + BALL_SPEED_Y * math.cos(angle)
                 split_balls.append({"rect": ball.copy(), "vx": vx, "vy": vy})
             powerup_banner_text = "Ball Split!"
+        elif powerup_type == "slow":
+            # Slow down all balls by 30%
+            BALL_SPEED_X *= 0.7
+            BALL_SPEED_Y *= 0.7
+            for b in split_balls:
+                b["vx"] *= 0.7
+                b["vy"] *= 0.7
+            powerup_banner_text = "Ball Slowed Down!"
         powerup = None
         powerup_active = True
         powerup_effect_timer = POWERUP_DURATION
@@ -440,11 +448,30 @@ def move_ball():
 
     # Paddle collision
     if ball.colliderect(player) or ball.colliderect(ai):
-        if ball.colliderect(player):
-            last_paddle_touched = "player"
+        if vector_mode:
+            if ball.colliderect(player):
+                BALL_SPEED_X = abs(BALL_SPEED_X)
+                # Only affect if paddle is moving
+                if abs(player_vel) > 0.1:
+                    if (BALL_SPEED_Y * player_vel) > 0:
+                        # Same direction: increase speed
+                        BALL_SPEED_Y += abs(player_vel) * 0.7
+                    else:
+                        # Opposite direction: decrease speed
+                        BALL_SPEED_Y -= abs(player_vel) * 0.7
+            else:
+                BALL_SPEED_X = -abs(BALL_SPEED_X)
+                if abs(ai_vel) > 0.1:
+                    if (BALL_SPEED_Y * ai_vel) > 0:
+                        BALL_SPEED_Y += abs(ai_vel) * 0.7
+                    else:
+                        BALL_SPEED_Y -= abs(ai_vel) * 0.7
         else:
-            last_paddle_touched = "ai"
-        BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'x')
+            if ball.colliderect(player):
+                last_paddle_touched = "player"
+            else:
+                last_paddle_touched = "ai"
+            BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'x')
         play_sound(HIT_SOUND)
 
     # Score
@@ -492,13 +519,19 @@ selected_fourp = 0  # 0: 1P vs 3CPU, 1: 2P vs 2CPU
 challenge_mode = False
 
 # Add challenge select screen
+# Add vector_mode flag
+vector_mode = False
+
+# Update challenge select screen to include Vector Mode
+vector_select_index = 0  # 0: Normal, 1: Challenge, 2: Vector
+
 def draw_challenge_select():
     WIN.fill((20, 20, 40))
     title = FONT.render("Select Mode", True, (255,255,0))
     WIN.blit(title, (WIDTH//2 - title.get_width()//2, 40))
-    opts = ["1. Normal", "2. Challenge"]
+    opts = ["1. Normal", "2. Challenge", "3. Vector"]
     for i, opt in enumerate(opts):
-        color = (0,255,0) if (challenge_mode and i == 1) or (not challenge_mode and i == 0) else (255,255,255)
+        color = (0,255,0) if i == vector_select_index else (255,255,255)
         opt_text = FONT.render(opt, True, color)
         WIN.blit(opt_text, (WIDTH//2 - opt_text.get_width()//2, 120 + i*50))
     info = pygame.font.SysFont("Arial", 20).render("Use UP/DOWN to select, ENTER to confirm", True, (200,200,200))
@@ -657,20 +690,52 @@ def move_fourp_ball():
     ball.y += BALL_SPEED_Y
     # Paddle collisions
     if ball.colliderect(paddle_left):
-        last_paddle_touched = "left"
-        BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'x')
+        if vector_mode:
+            BALL_SPEED_X = abs(BALL_SPEED_X)
+            if abs(paddle_left_vel) > 0.1:
+                if (BALL_SPEED_Y * paddle_left_vel) > 0:
+                    BALL_SPEED_Y += abs(paddle_left_vel) * 0.7
+                else:
+                    BALL_SPEED_Y -= abs(paddle_left_vel) * 0.7
+        else:
+            last_paddle_touched = "left"
+            BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'x')
         play_sound(HIT_SOUND)
     if ball.colliderect(paddle_right):
-        last_paddle_touched = "right"
-        BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'x')
+        if vector_mode:
+            BALL_SPEED_X = -abs(BALL_SPEED_X)
+            if abs(paddle_right_vel) > 0.1:
+                if (BALL_SPEED_Y * paddle_right_vel) > 0:
+                    BALL_SPEED_Y += abs(paddle_right_vel) * 0.7
+                else:
+                    BALL_SPEED_Y -= abs(paddle_right_vel) * 0.7
+        else:
+            last_paddle_touched = "right"
+            BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'x')
         play_sound(HIT_SOUND)
     if ball.colliderect(paddle_top):
-        last_paddle_touched = "top"
-        BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'y')
+        if vector_mode:
+            BALL_SPEED_Y = abs(BALL_SPEED_Y)
+            if abs(paddle_top_vel) > 0.1:
+                if (BALL_SPEED_X * paddle_top_vel) > 0:
+                    BALL_SPEED_X += abs(paddle_top_vel) * 0.7
+                else:
+                    BALL_SPEED_X -= abs(paddle_top_vel) * 0.7
+        else:
+            last_paddle_touched = "top"
+            BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'y')
         play_sound(HIT_SOUND)
     if ball.colliderect(paddle_bottom):
-        last_paddle_touched = "bottom"
-        BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'y')
+        if vector_mode:
+            BALL_SPEED_Y = -abs(BALL_SPEED_Y)
+            if abs(paddle_bottom_vel) > 0.1:
+                if (BALL_SPEED_X * paddle_bottom_vel) > 0:
+                    BALL_SPEED_X += abs(paddle_bottom_vel) * 0.7
+                else:
+                    BALL_SPEED_X -= abs(paddle_bottom_vel) * 0.7
+        else:
+            last_paddle_touched = "bottom"
+            BALL_SPEED_X, BALL_SPEED_Y = randomize_ball_angle(BALL_SPEED_X, BALL_SPEED_Y, 'y')
         play_sound(HIT_SOUND)
     # Wall scoring
     if ball.left <= 0:
@@ -774,6 +839,12 @@ def draw_fourp():
         for b in split_balls:
             pygame.draw.ellipse(WIN, theme["ball"], b["rect"])
 
+    # Draw vector mode banner if active
+    if vector_mode:
+        pygame.draw.rect(WIN, (0,0,0), (0,0,WIDTH,40))
+        vector_text = FONT.render("VECTOR MODE", True, (0,255,255))
+        WIN.blit(vector_text, (WIDTH//2 - vector_text.get_width()//2, 2))
+
     pygame.display.flip()
 
 def return_to_title():
@@ -813,11 +884,25 @@ MAX_BALL_SPEED = 12
 MAX_PADDLE_SPEED = 12
 MIN_PADDLE_HEIGHT = 30
 
+# Add paddle velocity tracking variables at the top:
+player_prev_y = 0
+player_vel = 0
+ai_prev_y = 0
+ai_vel = 0
+paddle_left_prev_y = 0
+paddle_left_vel = 0
+paddle_right_prev_y = 0
+paddle_right_vel = 0
+paddle_top_prev_x = 0
+paddle_top_vel = 0
+paddle_bottom_prev_x = 0
+paddle_bottom_vel = 0
+
 def main():
     clock = pygame.time.Clock()
     running = True
     load_high_score()
-    global slowmo, slowmo_timer, game_state, selected_mode, selected_fourp, TWO_PLAYER, four_player_mode, fourp_scores, challenge_mode, display_powerup_banner, powerup_banner_text, powerup_banner_timer, split_active, split_balls, split_timer
+    global slowmo, slowmo_timer, game_state, selected_mode, selected_fourp, TWO_PLAYER, four_player_mode, fourp_scores, challenge_mode, display_powerup_banner, powerup_banner_text, powerup_banner_timer, split_active, split_balls, split_timer, vector_mode, vector_select_index, player_prev_y, player_vel, ai_prev_y, ai_vel, paddle_left_prev_y, paddle_left_vel, paddle_right_prev_y, paddle_right_vel, paddle_top_prev_x, paddle_top_vel, paddle_bottom_prev_x, paddle_bottom_vel
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -841,13 +926,17 @@ def main():
                         game_state = STATE_CHALLENGE_SELECT
             elif game_state == STATE_CHALLENGE_SELECT:
                 if event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_UP or event.key == pygame.K_DOWN:
-                        challenge_mode = not challenge_mode
+                    if event.key == pygame.K_UP:
+                        vector_select_index = (vector_select_index - 1) % 3
+                    if event.key == pygame.K_DOWN:
+                        vector_select_index = (vector_select_index + 1) % 3
                     if event.key == pygame.K_RETURN:
                         game_state = STATE_PLAY
                         TWO_PLAYER = (selected_mode == 1)
                         four_player_mode = (selected_mode == 2)
                         fourp_scores[:] = [0,0,0,0]
+                        challenge_mode = (vector_select_index == 1)
+                        vector_mode = (vector_select_index == 2)
                         if four_player_mode:
                             assign_fourp_paddles(selected_fourp == 1)
                         # Optionally set up which paddles are human/AI based on selected_fourp
@@ -877,6 +966,21 @@ def main():
             draw_fourp()
             clock.tick(60)
             continue
+        # Track paddle velocities for vector mode
+        if vector_mode:
+            player_vel = player.y - player_prev_y
+            player_prev_y = player.y
+            ai_vel = ai.y - ai_prev_y
+            ai_prev_y = ai.y
+            paddle_left_vel = paddle_left.y - paddle_left_prev_y
+            paddle_left_prev_y = paddle_left.y
+            paddle_right_vel = paddle_right.y - paddle_right_prev_y
+            paddle_right_prev_y = paddle_right.y
+            paddle_top_vel = paddle_top.x - paddle_top_prev_x
+            paddle_top_prev_x = paddle_top.x
+            paddle_bottom_vel = paddle_bottom.x - paddle_bottom_prev_x
+            paddle_bottom_prev_x = paddle_bottom.x
+
         handle_player(keys)
         handle_player2(keys)
         if not TWO_PLAYER:
