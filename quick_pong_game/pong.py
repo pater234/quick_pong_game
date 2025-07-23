@@ -30,9 +30,76 @@ except Exception:
     pass  # Ignore if file not found
 
 # Screen dimensions
-WIDTH, HEIGHT = 480, 320  # Smaller window for corner play
+BASE_WIDTH, BASE_HEIGHT = 480, 320  # Base dimensions
+WIDTH, HEIGHT = BASE_WIDTH, BASE_HEIGHT  # Current dimensions
 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Quick Pong Game")
+
+# Dynamic resizing
+current_scale = 1.0
+MIN_SCALE = 0.5
+MAX_SCALE = 3.0
+
+def resize_screen(scale_factor):
+    global WIDTH, HEIGHT, WIN, current_scale, player, ai, ball, PADDLE_WIDTH, PADDLE_HEIGHT, BALL_SIZE, PLAYER_X, AI_X, POWERUP_SIZE
+    global paddle_left, paddle_right, paddle_top, paddle_bottom, obstacle, powerup, split_balls
+    
+    # Update scale
+    current_scale = max(MIN_SCALE, min(MAX_SCALE, scale_factor))
+    
+    # Calculate new dimensions
+    WIDTH = int(BASE_WIDTH * current_scale)
+    HEIGHT = int(BASE_HEIGHT * current_scale)
+    
+    # Resize window
+    WIN = pygame.display.set_mode((WIDTH, HEIGHT))
+    
+    # Update paddle and ball sizes
+    if current_scale <= 1.0:
+        # Scale down paddles and ball when screen is smaller than original
+        PADDLE_WIDTH = int(10 * current_scale)
+        PADDLE_HEIGHT = int(100 * current_scale)
+        BALL_SIZE = int(20 * current_scale)
+        POWERUP_SIZE = int(20 * current_scale)
+    else:
+        # Keep original sizes when screen is larger than original
+        PADDLE_WIDTH = 10
+        PADDLE_HEIGHT = 100
+        BALL_SIZE = 20
+        POWERUP_SIZE = 20
+    
+    # Update paddle positions
+    PLAYER_X = int(30 * current_scale)
+    AI_X = WIDTH - PLAYER_X - PADDLE_WIDTH
+    
+    # Recreate game objects with new dimensions
+    player = pygame.Rect(PLAYER_X, HEIGHT//2 - PADDLE_HEIGHT//2, PADDLE_WIDTH, PADDLE_HEIGHT)
+    ai = pygame.Rect(AI_X, HEIGHT//2 - PADDLE_HEIGHT//2, PADDLE_WIDTH, PADDLE_HEIGHT)
+    ball = pygame.Rect(WIDTH//2 - BALL_SIZE//2, HEIGHT//2 - BALL_SIZE//2, BALL_SIZE, BALL_SIZE)
+    
+    # Update four-player mode paddles if they exist
+    if 'paddle_left' in globals():
+        paddle_width = int(10 * current_scale) if current_scale <= 1.0 else 10
+        paddle_height = int(100 * current_scale) if current_scale <= 1.0 else 100
+        paddle_left = pygame.Rect(PLAYER_X, HEIGHT//2 - paddle_height//2, paddle_width, paddle_height)
+        paddle_right = pygame.Rect(AI_X, HEIGHT//2 - paddle_height//2, paddle_width, paddle_height)
+        paddle_top = pygame.Rect(WIDTH//2 - paddle_height//2, PLAYER_X, paddle_height, paddle_width)
+        paddle_bottom = pygame.Rect(WIDTH//2 - paddle_height//2, HEIGHT - PLAYER_X - paddle_width, paddle_height, paddle_width)
+    
+    # Update obstacle if it exists
+    if 'obstacle' in globals() and obstacle:
+        obstacle_size = int(20 * current_scale) if current_scale <= 1.0 else 20
+        obstacle = pygame.Rect(WIDTH//2 - obstacle_size//2, HEIGHT//2 - obstacle_size//2, obstacle_size, obstacle_size)
+    
+    # Update powerup if it exists
+    if powerup:
+        powerup = pygame.Rect(powerup.x * current_scale, powerup.y * current_scale, POWERUP_SIZE, POWERUP_SIZE)
+    
+    # Update split balls if they exist
+    if 'split_balls' in globals() and split_balls:
+        for split_ball in split_balls:
+            split_ball.width = BALL_SIZE
+            split_ball.height = BALL_SIZE
 
 # Colors
 WHITE = (255, 255, 255)
@@ -949,6 +1016,8 @@ def draw_controls_screen():
         "F1: Show/Hide Controls",
         "M: More Transparent (Overlay Mode)",
         "N: Less Transparent (Overlay Mode)",
+        "O: Toggle Overlay Mode / Decrease Size",
+        "P: Increase Screen Size",
         "C: Change Color Theme",
         "Up/Down: Move Paddle (P1)",
         "W/S: Move Paddle (P2 or AI)",
@@ -1044,6 +1113,12 @@ def main():
                                 set_windows_overlay(overlay_alpha)
                             else:
                                 WIN = pygame.display.set_mode((WIDTH, HEIGHT))
+                    if event.key == pygame.K_o and not overlay_mode:
+                        # Decrease screen size (only when not in overlay mode)
+                        resize_screen(current_scale - 0.1)
+                    if event.key == pygame.K_p:
+                        # Increase screen size
+                        resize_screen(current_scale + 0.1)
         if game_state == STATE_TITLE:
             draw_title()
             clock.tick(30)
